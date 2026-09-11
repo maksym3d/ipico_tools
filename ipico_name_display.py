@@ -423,6 +423,13 @@ def setup_display():
     # Use the calculated 1/4 dimensions for the initial layout sizing
     apply_layout(init_w, init_h)
 
+    # 1. Lift the window to the top of the window stack
+    screen_handle.lift()
+    # 2. Force it to be the absolute topmost window temporarily (highly effective on Windows)
+    screen_handle.attributes("-topmost", True)
+    screen_handle.after_idle(screen_handle.attributes, "-topmost", False)
+    # 3. Direct OS keyboard focus to this specific window
+    screen_handle.focus_force()
 
 
 ################### IPico Socket Functions #####################################################
