@@ -17,7 +17,7 @@ import sys
 # https://supportfileshare.active.com/Support/IPICO/Developers-Guide-Manual--2-3-2.pdf
 
 READ_ALOUD = True           # Enables text-to-speach to pronounce participnats names (requires pyttsx3)
-MOCK_IPICO = True           # Use fake date from the participants file (True) or the actual device (False)
+MOCK_IPICO = False           # Use fake date from the participants file (True) or the actual device (False)
 READER_IP = "192.168.0.54"  # IP Address of the IPico device
 READER_PORT = 10000         # Raw data port of the IPico device
 PACKET_SIZE = 38            # 34 ASCII-hex bytes + \r\n (2 bytes)
@@ -31,6 +31,9 @@ MAIN_ALIGNMENT = "center"   # Alignment of the main panel text: "left", "center"
 # ==========================================
 
 # Global state
+update_counter = 0
+last_displayed_tag = None
+update_counter_cache = None
 max_history_items = 10     
 right_panel_width = 200    
 left_panel_width = 800     
@@ -222,12 +225,16 @@ def shrink_to_fit(text, font, base_size, max_width, min_size=10):
 
 def update_display():
     global last_displayed_tag
+    global update_counter
+
+    update_counter = update_counter + 1
     """Updates the labels with the latest array data and constraints."""
     if not incoming_tags:
         return
         
     current_index = len(incoming_tags)
     current_record = incoming_tags[-1]
+    last_displayed_tag = current_record['tag']
 
     # 1. Prepare texts for the Left Panel labels
     [main_text, category_text, team_text] = get_labels_for_tag_record(current_record)
@@ -275,6 +282,7 @@ def update_display():
     
     history_text = "\n".join(history_list)
     history_label.config(text=history_text)
+    return update_counter
 
 def apply_layout(w, h):
     """Calculates fonts and capacities based on provided width and height."""
@@ -423,13 +431,6 @@ def setup_display():
     # Use the calculated 1/4 dimensions for the initial layout sizing
     apply_layout(init_w, init_h)
 
-    # 1. Lift the window to the top of the window stack
-    screen_handle.lift()
-    # 2. Force it to be the absolute topmost window temporarily (highly effective on Windows)
-    screen_handle.attributes("-topmost", True)
-    screen_handle.after_idle(screen_handle.attributes, "-topmost", False)
-    # 3. Direct OS keyboard focus to this specific window
-    screen_handle.focus_force()
 
 
 ################### IPico Socket Functions #####################################################
@@ -496,14 +497,14 @@ def mock_ipico_socket():
     
     mock_data = list(participants.keys()) + list(bibs_reverse.keys())[:5]
     
-    new_record = random.choice(mock_data)
-    if new_record not in (incoming_tag['tag'] for incoming_tag in incoming_tags):
+    new_tag = random.choice(mock_data)
+    if new_tag not in [incoming_tag['tag'] for incoming_tag in incoming_tags]:
         incoming_tags.append({
-            'tag': new_record,
+            'tag': new_tag,
             'time': datetime.now().strftime("%H:%M:%S")
         })
     
-    update_display()
+        if last_displayed_tag != new_tag: update_display()
     
     # Schedule the next record to arrive
     screen_handle.after(1500, mock_ipico_socket)
@@ -552,9 +553,11 @@ def listen_ipico_socket():
                     if parsed_data:
                         try:
                             new_record = {'tag': parsed_data['Tag ID'], 'time': parsed_data['Time']}
-                            if new_record not in (incoming_tag['tag'] for incoming_tag in incoming_tags): incoming_tags.append(new_record)
-                            incoming_tags.append(new_record)
-                            update_display()
+                            if new_record['tag'] not in [incoming_tag['tag'] for incoming_tag in incoming_tags]:
+                                incoming_tags.append(new_record)
+                         
+                                if last_displayed_tag != new_record['tag']: update_display()
+                                
                         except Exception:
                             traceback.print_exc()
                             
