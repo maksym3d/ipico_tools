@@ -100,7 +100,7 @@ def read_participants():
         print(reader.fieldnames)  # This will print the header names
 
         for row in reader:
-            bibs[row['num']] = row['tag']
+            bibs[row['num']] = row['tag'].upper()
             bibs_reverse[row['tag']] = row['num']
         
 
